@@ -1,0 +1,147 @@
+1. project
+- csvstat tmdb-movies.csv: kiểm tra tổng quan dữ liệu
+- awk -F, '{
+gsub(/, /, "; ");   # Thay dấu phẩy trong nội dung văn bản để không bị lệch cột
+print $0
+}' tmdb-movies.csv > fixed_tmdb.csv
+- awk -F, 'BEGIN{OFS=","}
+NR==1 {print $0}
+    
+    NR>1 {
+    gsub(/"/, "", $16);
+    if ($16 ~ /^[0-9]+\/[0-9]+\/[0-9]+$/) {
+    
+    split($16, d, "/");
+    year = (d[3] < 25) ? "20" d[3] : "19" d[3];
+    
+    $16 = year "-" sprintf("%02d", d[1]) "-" sprintf("%02d", d[2]);
+    
+    }
+    print $0
+    }' fixed_tmdb.csv > cleaned_tmdb.csv
+    
+    chỉnh lại định dạng date
+    
+- awk -F, 'NF == 21' cleaned_tmdb.csv > final_cleaned_tmdb.csv\n: xoá bớt khoảng 3% data có số cột khác 21
+- (cat final_cleaned_tmdb.csv | head -n1 && tail -n +2 final_cleaned_tmdb.csv | sort -t',' -k16,16r) > sorted_tmdb.csv: yêu cầu 1
+    - **`head -n1 final_cleaned_tmdb.csv`** → Giữ lại dòng tiêu đề (header).
+    - **`tail -n +2 final_cleaned_tmdb.csv`** → Bỏ dòng tiêu đề, chỉ lấy dữ liệu.
+    - **`sort -t',' -k16,16r`** →
+        - **`t','`**: Chia cột theo dấu `,`.
+        - **`k16,16r`**: Sắp xếp theo cột **release_date** (cột 16), `r` là **giảm dần**.
+    - **`>` sorted_tmdb.csv** → Lưu kết quả vào file mới `sorted_tmdb.csv`.
+- (head -n 1 final_cleaned_tmdb.csv && awk -F',' '$18 > 7.5' final_cleaned_tmdb.csv) > high_rated_movies.csv: yêu cầu 2
+    - **`head -n 1 final_cleaned_tmdb.csv`** → Giữ lại dòng tiêu đề (header).
+    - **`awk -F',' '$18 > 7.5' final_cleaned_tmdb.csv`** →
+        - **`F','`**: Định nghĩa dấu phân tách là dấu `,` (CSV).
+        - **`$18 > 7.5`**: Chỉ lấy những dòng có cột **vote_average** (**cột 18**) lớn hơn `7.5`.
+    - **`>` high_rated_movies.csv** → Lưu kết quả vào file mới `high_rated_movies.csv`.
+- awk -F',' 'NR==1 {header=$0; next}
+NR==2 || $5 > max_revenue {max_revenue=$5; max_line=$0}
+NR==2 || ($5 < min_revenue && $5 > 0) {min_revenue=$5; min_line=$0}
+END {print header; print max_line; print min_line}' final_cleaned_tmdb.csv
+    
+    id,imdb_id,popularity,budget,revenue,original_title,cast,homepage,director,tagline,keywords,overview,runtime,genres,production_companies,release_date,vote_count,vote_average,release_year,budget_adj,revenue_adj
+    19995,tt0499549,9.432768,237000000,2781505847,Avatar,Sam Worthington|Zoe Saldana|Sigourney Weaver|Stephen Lang|Michelle Rodriguez,http://www.avatarmovie.com/,James Cameron,Enter the World of Pandora.,culture clash|future|space war|space colony|society,"In the 22nd century; a paraplegic Marine is dispatched to the moon Pandora on a unique mission; but becomes torn between following orders and protecting an alien civilization.",162,Action|Adventure|Fantasy|Science Fiction,Ingenious Film Partners|Twentieth Century Fox Film Corporation|Dune Entertainment|Lightstorm Entertainment,2009-12-10,8458,7.1,2009,240886902.887613,2827123750.41189
+    13537,tt0323944,0.462609,6000000,2,Shattered Glass,Hayden Christensen|Peter Sarsgaard|ChloÃ« Sevigny|Rosario Dawson|Melanie Lynskey,,Billy Ray,,,"Fact-based 2003 drama about the young journalist Stephen Glass; who got a job at The New Republic in 1995 and for three years fabricated at least half of the stories he wrote.",94,Drama|History,Lions Gate Films|Cruise/Wagner Productions|Baumgarten Merims Productions,2003-11-14,46,6.4,2003,7112115.86869516,2.37070528956505
+    
+    phim cao nhất doanh thu là avatar với 2781505847, thấp nhất là Shattered Glass với 2
+    
+    - **`NR==1 {header=$0; next}`** → Lưu dòng tiêu đề.
+    - **`NR==2 || $5 > max_revenue`** → Cập nhật giá trị doanh thu cao nhất (cột 5).
+    - **`NR==2 || ($5 < min_revenue && $5 > 0)`** → Cập nhật giá trị doanh thu thấp nhất (bỏ qua giá trị `0`).
+    - **`END {print header; print max_line; print min_line}`** → In ra dòng tiêu đề + phim có doanh thu cao nhất + phim có doanh thu thấp nhất.
+- awk -F',' 'NR>1 {sum+=$5} END {print "Tổng doanh thu:", sum}' final_cleaned_tmdb.csv
+    
+    Tổng doanh thu: 420557888569 (của 97%)
+    
+    - **`F','`** → Chia cột theo dấu `,`
+    - **`NR>1`** → Bỏ qua dòng tiêu đề
+    - **`sum+=$5`** → Cộng dồn giá trị cột `revenue`
+    - **`END {print "Tổng doanh thu:", sum}`** → In ra tổng doanh thu
+- awk -F',' 'NR>1 {print $1","$6","$5-$4}' final_cleaned_tmdb.csv | sort -t',' -k3,3nr | head -n 10
+    
+    19995,Avatar,2544505847
+    140607,Star Wars: The Force Awakens,1868178225
+    597,Titanic,1645034188
+    135397,Jurassic World,1363528810
+    168259,Furious 7,1316249360
+    24428,The Avengers,1299557910
+    12445,Harry Potter and the Deathly Hallows: Part 2,1202817822
+    99861,Avengers: Age of Ultron,1125035767
+    109445,Frozen,1124219009
+    1642,The Net,1084279658
+    
+    - **`F','`** → Chia cột theo dấu `,`
+    - **`NR>1`** → Bỏ qua dòng tiêu đề
+    - **`print $1","$6","$5-$4`** → In ra:
+        - `ID phim` (`$1`)
+        - `Tên phim` (`$6`)
+        - `Lợi nhuận` (`$5 - $4`)
+    - **`sort -t',' -k3,3nr`** → Sắp xếp theo cột 3 (lợi nhuận) giảm dần (`nr = numeric reverse`)
+    - **`head -n 10`** → Lấy **10 bộ phim có lợi nhuận cao nhất**
+- cut -d',' -f9 final_cleaned_tmdb.csv | sort | uniq -c | sort -nr | head -n 10
+    
+    44 Woody Allen
+    39
+    33 Clint Eastwood
+    29 Steven Spielberg
+    27 Martin Scorsese
+    22 Ridley Scott
+    21 Steven Soderbergh
+    21 Ron Howard
+    21 Joel Schumacher
+    20 Brian De Palma
+    
+    - **`cut -d',' -f9`** → Cắt ra cột `director` (cột thứ 9)
+    - **`sort`** → Sắp xếp danh sách theo thứ tự bảng chữ cái
+    - **`uniq -c`** → Đếm số lần xuất hiện của mỗi đạo diễn
+    - **`sort -nr`** → Sắp xếp kết quả theo số lượng phim giảm dần
+    - **`head -n 10`** → Lấy **10 đạo diễn có nhiều phim nhất**
+    
+    awk -F',' 'NR>1 {split($7, actors, "|"); for (i in actors) print actors[i]}' final_cleaned_tmdb.csv | sort | uniq -c | sort -nr | head -n 10
+    
+    71 Robert De Niro
+    65 Samuel L. Jackson
+    61 Bruce Willis
+    59 Nicolas Cage
+    51 Robin Williams
+    51 Michael Caine
+    49 John Goodman
+    49 John Cusack
+    48 Susan Sarandon
+    48 Liam Neeson
+    
+    - **`F','`** → Chia cột theo dấu `,`
+    - **`NR>1`** → Bỏ qua dòng tiêu đề
+    - **`split($7, actors, "|")`** → Tách cột `cast` (cột 7) thành danh sách diễn viên bằng dấu `|`
+    - **`for (i in actors) print actors[i]`** → Lặp qua danh sách diễn viên và in từng tên
+    - **`sort | uniq -c`** → Đếm số lần xuất hiện của từng diễn viên
+    - **`sort -nr`** → Sắp xếp theo số lượng phim giảm dần
+    - **`head -n 10`** → Lấy **10 diễn viên đóng nhiều phim nhất**
+- cut -d',' -f14 cleaned_tmdb.csv | tail -n +2 > genres_raw.txt: **Trích xuất cột thể loại (thay số cột nếu cần)**
+    
+    tr '|' '\n' < genres_raw.txt | sort | uniq -c | sort -nr > genre_count.txt: Tách và đếm số lượng thể loại
+    
+    cat genre_count.txt
+    
+    4661 Drama
+    3694 Comedy
+    2838 Thriller
+    2311 Action
+    1686 Romance
+    1597 Horror
+    1422 Adventure
+    1324 Crime
+    1197 Family
+    1191 Science Fiction
+    890 Fantasy
+    796 Mystery
+    679 Animation
+    479 Documentary
+    380 Music
+    320 History
+    261 War
+    187 Foreign
+    162 Western
+    160 TV Movie
